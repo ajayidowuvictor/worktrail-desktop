@@ -34,6 +34,7 @@ jobs:
           WORKTRAIL_SMOKE: '1'
           WORKTRAIL_URL: http://127.0.0.1:8765/worktrail/
           SMOKE_OUT: ${{ github.workspace }}/smoke-out
+        shell: bash
         run: |
           mkdir -p smoke-out
           xvfb-run -a npx electron . --no-sandbox --disable-gpu 2>&1 | tee smoke-out/log.txt
@@ -112,10 +113,14 @@ jobs:
             echo "SIGNED=no" >> "$GITHUB_ENV"
           fi
       - name: Build the phone app
+        shell: bash
         run: gradle -p android assembleDebug assembleRelease --stacktrace -PwtVersionName=${APP_BASE}.${{ github.run_number }} -PwtVersionCode=${{ github.run_number }} 2>&1 | tee gradle.log
       - name: Show build problems
-        if: failure()
+        if: always()
+        shell: bash
         run: |
+          [ -f gradle.log ] || exit 0
+          grep -q "BUILD FAILED" gradle.log || exit 0
           msg=$(grep -E "error:|error |FAILED|What went wrong|Execution failed|Could not|Caused by|symbol|location:|^> " gradle.log | head -40 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
           echo "::error title=android-build::${msg}"
       - name: Collect the files

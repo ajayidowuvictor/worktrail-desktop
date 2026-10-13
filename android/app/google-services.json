@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1011562235631",
+    "project_id": "rockmines-worktrail",
+    "storage_bucket": "rockmines-worktrail.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1011562235631:android:045656f3def5ed879c3d1a",
+        "android_client_info": {
+          "package_name": "com.justnew.rockmines.worktrail"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDDTKk_E7dabVFOM9lJ5qzN2qzYFn3Nk30"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

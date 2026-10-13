@@ -137,6 +137,24 @@ final class SmokeHook {
                 check("update check: same or older version is ignored",
                         !UpdateChecker.isNewer("v1.1.7", "1.1.7") && !UpdateChecker.isNewer("1.1.6", "1.1.7") && !UpdateChecker.isNewer("v1.0.9", "1.1.0"));
 
+                // --- phone alerts (no Google needed: tests the app's own parts) ---
+                PushHelper.ensureChannels(a);
+                android.app.NotificationManager nm = (android.app.NotificationManager) a.getSystemService(android.content.Context.NOTIFICATION_SERVICE);
+                check("alert channels exist", android.os.Build.VERSION.SDK_INT < 26 || (nm.getNotificationChannel("tasks") != null && nm.getNotificationChannel("chat") != null));
+                final String fake = "abcDEF123:_-abcDEF123:_-abcDEF123:_-abcDEF123:_-";
+                a.runOnUiThread(() -> PushHelper.setCookie(fake));
+                Thread.sleep(500);
+                final String[] ck = new String[1];
+                final CountDownLatch cl = new CountDownLatch(1);
+                a.runOnUiThread(() -> { ck[0] = android.webkit.CookieManager.getInstance().getCookie(MainActivity.SITE_URL); cl.countDown(); });
+                cl.await(5, TimeUnit.SECONDS);
+                check("phone id cookie is set for the website", ck[0] != null && ck[0].contains("wt_push_token=" + fake), String.valueOf(ck[0]));
+                check("alert tap opens only the website's own pages",
+                        MainActivity.isOwnUrl("https://rockminesgeo.com/worktrail/?wt=tasks%2F9") && MainActivity.isOwnUrl("https://rockminesgeo.com/worktrail/")
+                                && !MainActivity.isOwnUrl("https://evil.example/worktrail/") && !MainActivity.isOwnUrl("https://rockminesgeo.com.evil.example/") && !MainActivity.isOwnUrl(null));
+                android.app.Notification n = PushHelper.build(a, "chat", "Admin", "Good morning", "https://rockminesgeo.com/worktrail/?wt=messages");
+                check("alert notification is built", n != null && "Admin".contentEquals(n.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)) && n.contentIntent != null);
+
                 a.runOnUiThread(a::offlineForTest);
                 check("\"no internet\" page loads",
                         waitFor(a, () -> a.overlayView().getUrl() != null && a.overlayView().getUrl().contains("offline/offline.html"), 8000),

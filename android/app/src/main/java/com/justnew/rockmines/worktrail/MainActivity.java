@@ -54,7 +54,10 @@ public class MainActivity extends Activity {
     static final String SITE_URL = "https://rockminesgeo.com/worktrail/";
     static final String ASSET_BASE = "https://appassets.androidplatform.net/assets/";
     static final String UA_TAG = "RockminesWorkTrailApp";
+    static final String EXTRA_OPEN = "wt_open";
+    static volatile boolean visible = false;
     private static final int REQ_FILES = 4101;
+    private static final int REQ_NOTIFY = 4102;
     private static final long LOAD_TIMEOUT_MS = 30000;
 
     private String siteUrl = SITE_URL;
@@ -91,6 +94,8 @@ public class MainActivity extends Activity {
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().getStringExtra("url") != null) {
             siteUrl = getIntent().getStringExtra("url"); // used only by the automatic self-check
         }
+        String tapped = getIntent() == null ? null : getIntent().getStringExtra(EXTRA_OPEN);
+        if (isOwnUrl(tapped)) siteUrl = tapped; // opened from a phone alert
         siteOrigin = originOf(siteUrl);
         cleanScript = readAsset("clean-view.js");
 
@@ -117,8 +122,12 @@ public class MainActivity extends Activity {
 
         setContentView(root);
 
+        PushHelper.ensureChannels(this);
+        String saved = PushHelper.savedToken(this);
+        if (!saved.isEmpty()) PushHelper.setCookie(saved);
         loadSite();
         overlay.loadUrl(ASSET_BASE + "splash/splash.html");
+        PushHelper.fetchToken(this, token -> ui.post(this::claimPhone));
 
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("smoke")) {
             SmokeHook.run(this);
@@ -326,6 +335,35 @@ public class MainActivity extends Activity {
         site.setVisibility(View.VISIBLE);
         overlay.setVisibility(View.GONE);
         site.requestFocus();
+        askForAlerts();
+    }
+
+    /* ------------------------------------------------------------ phone alerts */
+
+    /** Tells the website which phone this is (it reads the cookie while the person is signed in). */
+    private void claimPhone() {
+        if (site == null || !entered) return;
+        site.evaluateJavascript("(function(){var c=window.WorkTrailConfig;if(c&&c.restUrl){fetch(c.restUrl+'bootstrap',{credentials:'same-origin',headers:{'X-WP-Nonce':c.nonce||''}}).catch(function(){});}})()", null);
+    }
+
+    /** On Android 13 and newer the person must allow alerts once; explain first, then ask. */
+    private void askForAlerts() {
+        if (Build.VERSION.SDK_INT < 33 || BuildConfig.DEBUG) return;
+        if (PushHelper.canNotify(this)) return;
+        final android.content.SharedPreferences p = getSharedPreferences("wt", Context.MODE_PRIVATE);
+        if (p.getBoolean("askedAlerts", false)) return;
+        p.edit().putBoolean("askedAlerts", true).apply();
+        new AlertDialog.Builder(this)
+                .setTitle("Turn on alerts?")
+                .setMessage("WorkTrail can tell you when you get a new task or message, even when the app is closed.")
+                .setPositiveButton("Turn on", (d, w) -> requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQ_NOTIFY))
+                .setNegativeButton("Not now", null)
+                .show();
+    }
+
+    /** True only for pages of the website itself. */
+    static boolean isOwnUrl(String url) {
+        return url != null && (url.equals(SITE_URL.substring(0, SITE_URL.length() - 1)) || url.startsWith(SITE_URL));
     }
 
     private void showOffline() {
@@ -407,6 +445,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        setIntent(intent);
+        String tapped = intent == null ? null : intent.getStringExtra(EXTRA_OPEN);
+        if (isOwnUrl(tapped) && site != null) {
+            siteUrl = tapped;
+            site.loadUrl(tapped); // opened from a phone alert
+        }
         if (BuildConfig.DEBUG) Log.i("WTSMOKE", "onNewIntent " + System.identityHashCode(this));
     }
 
@@ -423,12 +467,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        visible = true;
         site.onResume();
         site.resumeTimers();
     }
 
     @Override
     protected void onPause() {
+        visible = false;
         CookieManager.getInstance().flush();
         site.onPause();
         super.onPause();

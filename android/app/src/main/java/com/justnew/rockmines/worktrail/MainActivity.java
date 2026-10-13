@@ -15,6 +15,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
@@ -85,6 +86,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (BuildConfig.DEBUG) Log.i("WTSMOKE", "onCreate " + System.identityHashCode(this) + " restored=" + (savedInstanceState != null));
 
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().getStringExtra("url") != null) {
             siteUrl = getIntent().getStringExtra("url"); // used only by the automatic self-check
@@ -402,6 +404,12 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
     }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (BuildConfig.DEBUG) Log.i("WTSMOKE", "onNewIntent " + System.identityHashCode(this));
+    }
+
     @SuppressWarnings("deprecation")
     @Override
     public void onBackPressed() {
@@ -428,6 +436,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (BuildConfig.DEBUG) Log.i("WTSMOKE", "onDestroy " + System.identityHashCode(this) + " finishing=" + isFinishing() + " configChange=" + isChangingConfigurations());
         ui.removeCallbacksAndMessages(null);
         super.onDestroy();
     }

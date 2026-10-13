@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rockmines WorkTrail</title>
+<style>
+	:root { --g: #039331; --g-d: #026f25; --ink: #0b1f14; --muted: #5b6b61; }
+	* { box-sizing: border-box; margin: 0; padding: 0; }
+	html, body { height: 100%; background: #fff; }
+	body { font-family: Bahnschrift, "Segoe UI", system-ui, sans-serif; color: var(--ink); display: grid; place-items: center; text-align: center; padding: 24px; -webkit-font-smoothing: antialiased; }
+	.card { max-width: 520px; }
+	img { width: 150px; height: auto; margin-bottom: 18px; }
+	h1 { font-size: 28px; font-weight: 800; margin-bottom: 10px; }
+	p { color: var(--muted); font-size: 16px; line-height: 1.5; margin-bottom: 8px; }
+	.why { font-size: 13px; color: #8a978f; margin-bottom: 22px; min-height: 1em; }
+	button { font: inherit; font-weight: 700; font-size: 16px; color: #fff; background: linear-gradient(180deg, var(--g), var(--g-d)); border: 0; border-radius: 12px; padding: 13px 34px; cursor: pointer; box-shadow: 0 6px 18px rgba(3, 147, 49, .35); }
+	button:hover { filter: brightness(1.08); }
+	button[disabled] { opacity: .6; cursor: default; }
+	.auto { margin-top: 18px; font-size: 13px; color: #8a978f; }
+</style>
+</head>
+<body>
+<div class="card">
+	<img src="../splash/logo.png" alt="Rockmines logo">
+	<h1>WorkTrail can&rsquo;t connect right now</h1>
+	<p>Please check that this computer is connected to the internet. Your work is safe, nothing was lost.</p>
+	<p class="why" id="why"></p>
+	<button id="retry">Try again</button>
+	<p class="auto" id="auto">Trying again automatically every 20 seconds.</p>
+</div>
+<script>
+	(function () {
+		var q = new URLSearchParams(location.search).get('why');
+		if (q) document.getElementById('why').textContent = 'Details: ' + q;
+		var btn = document.getElementById('retry');
+		function retry() {
+			btn.disabled = true;
+			btn.textContent = 'Connecting…';
+			if (window.wt) window.wt.retry();
+		}
+		btn.addEventListener('click', retry);
+		setTimeout(retry, 20000);
+	})();
+</script>
+</body>
+</html>

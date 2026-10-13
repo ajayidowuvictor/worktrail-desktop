@@ -1,0 +1,57 @@
+{
+  "name": "rockmines-worktrail",
+  "productName": "Rockmines WorkTrail",
+  "version": "1.0.0",
+  "description": "Rockmines WorkTrail: see who is holding which job, since when and for how long.",
+  "author": {
+    "name": "JustNew",
+    "email": "noreply@rockminesgeo.com"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.justnew.rockmines.worktrail",
+    "productName": "Rockmines WorkTrail",
+    "copyright": "Developed by JustNew for Rockmines Geo-Environmental Services Limited",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Rockmines-WorkTrail-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Rockmines WorkTrail",
+      "runAfterFinish": true
+    }
+  }
+}

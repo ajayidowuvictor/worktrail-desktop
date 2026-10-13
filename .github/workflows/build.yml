@@ -1,0 +1,68 @@
+name: Build Rockmines WorkTrail
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # 1. Self-check: opens the program on a test machine and takes pictures.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Tools for running a window on a test machine
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgbm1 libasound2t64 || sudo apt-get install -y xvfb libgbm1 libasound2
+      - name: Start test page
+        run: |
+          python3 -m http.server 8765 --directory smoke-site &
+          sleep 2
+      - name: Run the program self-check
+        env:
+          WORKTRAIL_SMOKE: '1'
+          WORKTRAIL_URL: http://127.0.0.1:8765/worktrail/
+          SMOKE_OUT: ${{ github.workspace }}/smoke-out
+        run: xvfb-run -a npx electron . --no-sandbox --disable-gpu
+      - name: Save the pictures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-check-pictures
+          path: smoke-out
+          if-no-files-found: ignore
+
+  # 2. The Windows installer.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Build the installer
+        run: npm run dist
+      - name: Save the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rockmines-WorkTrail-Setup
+          path: dist/*.exe
+      - name: Publish on the Releases page
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          name: Rockmines WorkTrail ${{ github.ref_name }}
+          body: |
+            Download **Rockmines-WorkTrail-Setup-*.exe**, double-click it, and WorkTrail installs itself.
+            If Windows shows a blue "Windows protected your PC" box, click **More info**, then **Run anyway**.

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rockmines WorkTrail</title>
+<link rel="stylesheet" href="splash.css">
+</head>
+<body>
+<main id="stage" class="light" aria-label="Welcome to Rockmines WorkTrail">
+
+	<!-- 1. Logo on white, with the welcome line under it -->
+	<section class="slide s1 active" data-light="1">
+		<div class="s1-glow"></div>
+		<div class="s1-core">
+			<img class="s1-logo" src="logo.png" alt="Rockmines logo">
+			<h1 class="s1-title">
+				<span class="w w1">Welcome</span> <span class="w w2">to</span>
+				<span class="w w3 brand">Rockmines</span> <span class="w w4 brand">WorkTrail</span>
+			</h1>
+			<div class="s1-line"></div>
+		</div>
+	</section>
+
+	<!-- 2. Who is holding what -->
+	<section class="slide dark s2">
+		<div class="bg"><i class="orb"></i><i class="grid"></i></div>
+		<div class="caption">
+			<div class="kicker"><b>01</b><i></i><span>Monitor</span></div>
+			<h2>Who is holding <em>what</em></h2>
+			<p>See every job, who has it, since when, and for how long.</p>
+		</div>
+		<div class="visual rows">
+			<div class="row r1"><span class="av">AO</span><div><b>Asaba ESIA</b><small>Started 3 days ago</small></div><span class="pill ok">On track</span></div>
+			<div class="row r2"><span class="av">NE</span><div><b>Quarterly monitoring</b><small>Started 9 days ago</small></div><span class="pill warn">Due soon</span></div>
+			<div class="row r3"><span class="av">TJ</span><div><b>Environmental audit</b><small>Started 15 days ago</small></div><span class="pill bad">Past deadline</span></div>
+			<div class="row r4"><span class="av">MK</span><div><b>GIS mapping</b><small>Started today</small></div><span class="pill ok">On track</span></div>
+		</div>
+	</section>
+
+	<!-- 3. Start, hand in, reviewed -->
+	<section class="slide dark s3">
+		<div class="bg"><i class="orb"></i><i class="grid"></i></div>
+		<div class="caption">
+			<div class="kicker"><b>02</b><i></i><span>Every job has a clock</span></div>
+			<h2>Start. Hand in. <em>Reviewed.</em></h2>
+			<p>A deadline, a start date and a full history, for every job.</p>
+		</div>
+		<div class="visual tl">
+			<div class="clockwrap">
+				<svg class="clock" viewBox="0 0 120 120" aria-hidden="true">
+					<circle class="c-bg" cx="60" cy="60" r="52"/>
+					<circle class="c-fg" cx="60" cy="60" r="52"/>
+				</svg>
+				<div class="clock-txt"><b>3</b><small>days with you</small></div>
+			</div>
+			<div class="tl-track">
+				<div class="line"><i></i></div>
+				<ol class="nodes">
+					<li class="n1"><u></u><span>Given</span></li>
+					<li class="n2"><u></u><span>Started</span></li>
+					<li class="n3"><u></u><span>Handed in</span></li>
+					<li class="n4"><u></u><span>Approved</span></li>
+				</ol>
+			</div>
+		</div>
+	</section>
+
+	<!-- 4. Chat -->
+	<section class="slide dark s4">
+		<div class="bg"><i class="orb"></i><i class="grid"></i></div>
+		<div class="caption">
+			<div class="kicker"><b>03</b><i></i><span>Messages</span></div>
+			<h2>Talk to your <em>team</em></h2>
+			<p>Private chats and an Everyone room, right inside WorkTrail.</p>
+		</div>
+		<div class="visual chat">
+			<div class="msg m1 them">Draft of the baseline chapter is ready for checking.</div>
+			<div class="msg m2 me">Thanks. Reviewing it now.</div>
+			<div class="msg m3 me">Please add the site map to section 3.</div>
+			<div class="msg m4 them">Done. Uploaded the new version.</div>
+			<div class="msg typing them"><i></i><i></i><i></i></div>
+		</div>
+	</section>
+
+	<!-- 5. Portfolio -->
+	<section class="slide dark s5">
+		<div class="bg"><i class="orb"></i><i class="grid"></i></div>
+		<div class="caption">
+			<div class="kicker"><b>04</b><i></i><span>Portfolio</span></div>
+			<h2>Your work, <em>kept</em></h2>
+			<p>Every report you finish stays in your portfolio, ready to show.</p>
+		</div>
+		<div class="visual docs">
+			<div class="doc d1"><span class="tag">ESIA</span><i></i><i></i><i class="short"></i></div>
+			<div class="doc d2"><span class="tag">Audit</span><i></i><i></i><i class="short"></i></div>
+			<div class="doc d3"><span class="tag">Report</span><i></i><i></i><i class="short"></i><span class="ok">Confirmed</span></div>
+		</div>
+	</section>
+
+	<!-- 6. Ready -->
+	<section class="slide dark s6">
+		<div class="bg"><i class="orb"></i><i class="grid"></i></div>
+		<div class="s6-core">
+			<div class="badge"><img src="logo.png" alt=""></div>
+			<h2>Ready when <em>you are</em></h2>
+			<p id="status">Connecting to Rockmines WorkTrail&hellip;</p>
+		</div>
+	</section>
+
+	<div class="grain"></div>
+	<div class="vignette"></div>
+
+	<footer class="bar">
+		<span class="brand-mini">Rockmines <b>WorkTrail</b></span>
+		<div class="track"><div class="fill" id="fill"></div></div>
+		<span class="hint" id="hint">Click anywhere to skip</span>
+	</footer>
+
+	<div class="leave" id="leave"></div>
+</main>
+<script src="splash.js"></script>
+</body>
+</html>

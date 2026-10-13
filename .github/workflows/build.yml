@@ -47,7 +47,7 @@ jobs:
           cp -r /tmp/res/. . || true
           git add -A
           git commit -m "Self-check results" || true
-          git push -f origin smoke-results 2>&1 | tee /tmp/push.log || echo "::warning title=push-failed::$(tr '\n' ' ' < /tmp/push.log)"
+          git push -f origin smoke-results 2>&1 | tee /tmp/push.log || echo "::error title=push-failed::$(tr '\n' ' ' < /tmp/push.log)"
       - name: Save the pictures
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,11 +74,13 @@ jobs:
           name: Rockmines-WorkTrail-Setup
           path: dist/*.exe
       - name: Publish on the Releases page
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
+          target_commitish: ${{ github.sha }}
           files: dist/*.exe
-          name: Rockmines WorkTrail ${{ github.ref_name }}
+          name: Rockmines WorkTrail (build ${{ github.run_number }})
           body: |
-            Download **Rockmines-WorkTrail-Setup-*.exe**, double-click it, and WorkTrail installs itself.
+            Download **Rockmines-WorkTrail-Setup-*.exe** below, double-click it, and WorkTrail installs itself.
             If Windows shows a blue "Windows protected your PC" box, click **More info**, then **Run anyway**.

@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.media.AudioAttributes;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -25,8 +26,11 @@ import com.google.firebase.messaging.FirebaseMessaging;
  */
 final class PushHelper {
 
-    static final String CHANNEL_TASKS = "tasks";
-    static final String CHANNEL_CHAT = "chat";
+    // "2" = the version with WorkTrail's own sounds. "q" = the quiet version, used when the person switched Sounds off.
+    static final String CHANNEL_TASKS = "tasks2";
+    static final String CHANNEL_CHAT = "chat2";
+    static final String CHANNEL_TASKS_QUIET = "tasks2q";
+    static final String CHANNEL_CHAT_QUIET = "chat2q";
     static final String COOKIE = "wt_push_token";
 
     private PushHelper() { }
@@ -39,12 +43,29 @@ final class PushHelper {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
-        NotificationChannel tasks = new NotificationChannel(CHANNEL_TASKS, "Tasks and updates", NotificationManager.IMPORTANCE_HIGH);
-        tasks.setDescription("New tasks, approvals, comments and reminders");
-        NotificationChannel chat = new NotificationChannel(CHANNEL_CHAT, "Messages", NotificationManager.IMPORTANCE_HIGH);
-        chat.setDescription("Chat messages from colleagues");
-        nm.createNotificationChannel(tasks);
-        nm.createNotificationChannel(chat);
+        // The first version of the channels had the phone's default sound.
+        nm.deleteNotificationChannel("tasks");
+        nm.deleteNotificationChannel("chat");
+        AudioAttributes attrs = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+        nm.createNotificationChannel(channel(CHANNEL_TASKS, "Tasks and updates", "New tasks, approvals, comments and reminders", soundUri(c, R.raw.wt_notify), attrs));
+        nm.createNotificationChannel(channel(CHANNEL_CHAT, "Messages", "Chat messages from colleagues", soundUri(c, R.raw.wt_message), attrs));
+        nm.createNotificationChannel(channel(CHANNEL_TASKS_QUIET, "Tasks and updates (no sound)", "Used when Sounds is switched off in WorkTrail", null, null));
+        nm.createNotificationChannel(channel(CHANNEL_CHAT_QUIET, "Messages (no sound)", "Used when Sounds is switched off in WorkTrail", null, null));
+    }
+
+    private static NotificationChannel channel(String id, String name, String description, Uri sound, AudioAttributes attrs) {
+        NotificationChannel ch = new NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH);
+        ch.setDescription(description);
+        ch.setSound(sound, attrs); // null = silent
+        ch.enableVibration(sound != null);
+        return ch;
+    }
+
+    static Uri soundUri(Context c, int rawId) {
+        return Uri.parse("android.resource://" + c.getPackageName() + "/" + rawId);
     }
 
     /** Puts the phone's address in a cookie for the website (runs on the main thread). */
@@ -103,8 +124,9 @@ final class PushHelper {
         return Build.VERSION.SDK_INT < 33 || c.checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED;
     }
 
-    static Notification build(Context c, String kind, String title, String body, String url) {
-        String channel = "chat".equals(kind) ? CHANNEL_CHAT : CHANNEL_TASKS;
+    static Notification build(Context c, String kind, String title, String body, String url, boolean sound) {
+        boolean chat = "chat".equals(kind);
+        String channel = chat ? (sound ? CHANNEL_CHAT : CHANNEL_CHAT_QUIET) : (sound ? CHANNEL_TASKS : CHANNEL_TASKS_QUIET);
         Intent open = new Intent(c, MainActivity.class);
         open.setAction(Intent.ACTION_MAIN);
         open.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -113,7 +135,7 @@ final class PushHelper {
         int req = (int) (System.currentTimeMillis() & 0x7fffffff);
         PendingIntent pi = PendingIntent.getActivity(c, req, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        return new NotificationCompat.Builder(c, channel)
+        NotificationCompat.Builder nb = new NotificationCompat.Builder(c, channel)
                 .setSmallIcon(R.drawable.ic_stat_wt)
                 .setColor(0xFF039331)
                 .setContentTitle(title)
@@ -121,19 +143,23 @@ final class PushHelper {
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
                 .setCategory("chat".equals(kind) ? NotificationCompat.CATEGORY_MESSAGE : NotificationCompat.CATEGORY_EVENT)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setAutoCancel(true)
-                .setContentIntent(pi)
-                .build();
+                .setContentIntent(pi);
+        if (Build.VERSION.SDK_INT < 26) {
+            // Older phones have no channels: set the sound and vibration on the alert itself.
+            if (sound) nb.setSound(soundUri(c, chat ? R.raw.wt_message : R.raw.wt_notify)).setVibrate(new long[]{0, 120, 80, 120});
+            else nb.setSilent(true);
+        }
+        return nb.build();
     }
 
-    static void show(Context c, String kind, String title, String body, String url) {
+    static void show(Context c, String kind, String title, String body, String url, boolean sound) {
         if (!canNotify(c)) return;
         ensureChannels(c);
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
         int id = (int) (System.currentTimeMillis() & 0x7fffffff);
-        nm.notify(id, build(c, kind, title == null || title.isEmpty() ? "Rockmines WorkTrail" : title, body == null ? "" : body, url));
+        nm.notify(id, build(c, kind, title == null || title.isEmpty() ? "Rockmines WorkTrail" : title, body == null ? "" : body, url, sound));
     }
 
     /** Parses a tap target safely: only the website's own pages are ever opened. */

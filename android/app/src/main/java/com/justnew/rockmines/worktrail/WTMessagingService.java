@@ -19,6 +19,6 @@ public class WTMessagingService extends FirebaseMessagingService {
         if (MainActivity.visible) return;
         Map<String, String> d = message.getData();
         if (d == null || d.isEmpty()) return;
-        PushHelper.show(this, d.get("kind"), d.get("title"), d.get("body"), d.get("url"));
+        PushHelper.show(this, d.get("kind"), d.get("title"), d.get("body"), d.get("url"), !"0".equals(d.get("sound")));
     }
 }

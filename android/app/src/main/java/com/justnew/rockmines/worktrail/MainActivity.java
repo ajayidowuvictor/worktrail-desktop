@@ -419,6 +419,20 @@ public class MainActivity extends Activity {
             site.reload();
         } else if ("update".equals(action)) {
             UpdateChecker.check(this, true);
+        } else if ("alerts".equals(action)) {
+            openAlertSettings();
+        }
+    }
+
+    /** Opens the phone's own settings page for this app's alerts (sound, vibration, on/off). */
+    private void openAlertSettings() {
+        try {
+            Intent i = Build.VERSION.SDK_INT >= 26
+                    ? new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName())
+                    : new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
+            startActivity(i);
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not open the phone's alert settings.", Toast.LENGTH_SHORT).show();
         }
     }
 

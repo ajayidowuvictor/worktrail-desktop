@@ -140,7 +140,16 @@ final class SmokeHook {
                 // --- phone alerts (no Google needed: tests the app's own parts) ---
                 PushHelper.ensureChannels(a);
                 android.app.NotificationManager nm = (android.app.NotificationManager) a.getSystemService(android.content.Context.NOTIFICATION_SERVICE);
-                check("alert channels exist", android.os.Build.VERSION.SDK_INT < 26 || (nm.getNotificationChannel("tasks") != null && nm.getNotificationChannel("chat") != null));
+                boolean chans = android.os.Build.VERSION.SDK_INT < 26;
+                if (!chans) {
+                    android.app.NotificationChannel tl = nm.getNotificationChannel(PushHelper.CHANNEL_TASKS);
+                    android.app.NotificationChannel cl = nm.getNotificationChannel(PushHelper.CHANNEL_CHAT);
+                    android.app.NotificationChannel tq = nm.getNotificationChannel(PushHelper.CHANNEL_TASKS_QUIET);
+                    android.app.NotificationChannel cq = nm.getNotificationChannel(PushHelper.CHANNEL_CHAT_QUIET);
+                    chans = tl != null && cl != null && tq != null && cq != null
+                            && tl.getSound() != null && cl.getSound() != null && tq.getSound() == null && cq.getSound() == null;
+                }
+                check("alert channels exist (with WorkTrail sounds, and quiet ones)", chans);
                 final String fake = "abcDEF123:_-abcDEF123:_-abcDEF123:_-abcDEF123:_-";
                 a.runOnUiThread(() -> PushHelper.setCookie(fake));
                 Thread.sleep(500);
@@ -152,7 +161,7 @@ final class SmokeHook {
                 check("alert tap opens only the website's own pages",
                         MainActivity.isOwnUrl("https://rockminesgeo.com/worktrail/?wt=tasks%2F9") && MainActivity.isOwnUrl("https://rockminesgeo.com/worktrail/")
                                 && !MainActivity.isOwnUrl("https://evil.example/worktrail/") && !MainActivity.isOwnUrl("https://rockminesgeo.com.evil.example/") && !MainActivity.isOwnUrl(null));
-                android.app.Notification n = PushHelper.build(a, "chat", "Admin", "Good morning", "https://rockminesgeo.com/worktrail/?wt=messages");
+                android.app.Notification n = PushHelper.build(a, "chat", "Admin", "Good morning", "https://rockminesgeo.com/worktrail/?wt=messages", true);
                 check("alert notification is built", n != null && "Admin".contentEquals(n.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)) && n.contentIntent != null);
 
                 a.runOnUiThread(a::offlineForTest);

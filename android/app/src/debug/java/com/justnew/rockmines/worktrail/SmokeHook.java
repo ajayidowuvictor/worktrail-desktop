@@ -17,10 +17,19 @@ import java.util.concurrent.TimeUnit;
 final class SmokeHook {
     private static final String TAG = "WTSMOKE";
     private static int failed = 0;
+    // If Android restarts the app screen while the check runs, only the newest run reports.
+    private static volatile Thread active;
+
+    private static final class Superseded extends RuntimeException { }
+
+    private static void ensureActive() {
+        if (Thread.currentThread() != active) throw new Superseded();
+    }
 
     private SmokeHook() { }
 
     private static void check(String name, boolean ok, String extra) {
+        ensureActive();
         if (!ok) failed++;
         Log.i(TAG, (ok ? "PASS " : "FAIL ") + name + (extra == null ? "" : "  " + extra));
     }
@@ -79,7 +88,8 @@ final class SmokeHook {
     }
 
     static void run(final MainActivity a) {
-        new Thread(() -> {
+        failed = 0;
+        final Thread worker = new Thread(() -> {
             try {
                 check("app started and welcome screen is showing",
                         waitFor(a, () -> a.overlayView().getUrl() != null && a.overlayView().getUrl().contains("splash/splash.html"), 20000),
@@ -131,12 +141,18 @@ final class SmokeHook {
                 check("\"no internet\" page loads",
                         waitFor(a, () -> a.overlayView().getUrl() != null && a.overlayView().getUrl().contains("offline/offline.html"), 8000),
                         urlOf(a, a.overlayView()));
+            } catch (Superseded ignored) {
+                return;
             } catch (Throwable t) {
+                if (Thread.currentThread() != active) return;
                 failed++;
                 Log.e(TAG, "FAIL smoke crashed: " + Log.getStackTraceString(t));
             }
+            if (Thread.currentThread() != active) return;
             Log.i(TAG, failed == 0 ? "SMOKE PASSED" : "SMOKE FAILED (" + failed + ")");
             Log.i(TAG, "WTSMOKE_DONE");
-        }).start();
+        });
+        active = worker;
+        worker.start();
     }
 }

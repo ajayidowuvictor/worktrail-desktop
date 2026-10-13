@@ -50,6 +50,18 @@ final class SmokeHook {
         }
     }
 
+    /** WebView may only be touched on the main thread; this reads an address safely. */
+    private static String urlOf(final Activity a, final WebView w) {
+        final String[] out = new String[1];
+        final CountDownLatch latch = new CountDownLatch(1);
+        a.runOnUiThread(() -> {
+            out[0] = String.valueOf(w.getUrl());
+            latch.countDown();
+        });
+        try { latch.await(5, TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+        return out[0];
+    }
+
     private static boolean waitFor(Activity a, java.util.concurrent.Callable<Boolean> cond, long ms) throws Exception {
         long end = System.currentTimeMillis() + ms;
         while (System.currentTimeMillis() < end) {
@@ -71,7 +83,7 @@ final class SmokeHook {
             try {
                 check("app started and welcome screen is showing",
                         waitFor(a, () -> a.overlayView().getUrl() != null && a.overlayView().getUrl().contains("splash/splash.html"), 20000),
-                        String.valueOf(a.overlayView().getUrl()));
+                        urlOf(a, a.overlayView()));
                 check("welcome screen can talk to the app",
                         "objectfunction".equals(text(eval(a, a.overlayView(), "typeof window.wt + typeof window.wt.enter"))));
                 check("website loaded in background", waitFor(a, () -> "ready".equals(a.siteStateNow()), 40000), "state=" + a.siteStateNow());
@@ -113,7 +125,7 @@ final class SmokeHook {
                 a.runOnUiThread(a::offlineForTest);
                 check("\"no internet\" page loads",
                         waitFor(a, () -> a.overlayView().getUrl() != null && a.overlayView().getUrl().contains("offline/offline.html"), 8000),
-                        String.valueOf(a.overlayView().getUrl()));
+                        urlOf(a, a.overlayView()));
             } catch (Throwable t) {
                 failed++;
                 Log.e(TAG, "FAIL smoke crashed: " + Log.getStackTraceString(t));

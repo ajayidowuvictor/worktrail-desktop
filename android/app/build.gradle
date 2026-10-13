@@ -1,0 +1,58 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Set by the GitHub build: -PwtVersionName=1.1.8 -PwtVersionCode=8
+def wtVersionName = (project.findProperty('wtVersionName') ?: '1.1.0')
+def wtVersionCode = (project.findProperty('wtVersionCode') ?: '1').toInteger()
+def keystorePath = System.getenv('WT_KEYSTORE_FILE')
+
+android {
+    namespace 'com.justnew.rockmines.worktrail'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.justnew.rockmines.worktrail'
+        minSdk 24
+        targetSdk 34
+        versionCode wtVersionCode
+        versionName wtVersionName
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword System.getenv('WT_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('WT_KEY_ALIAS')
+                keyPassword System.getenv('WT_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keystorePath) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}

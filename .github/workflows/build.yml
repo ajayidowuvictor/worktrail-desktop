@@ -73,22 +73,125 @@ jobs:
           cat dist/latest.yml
           # A copy with a name that never changes, so one download link always gives the newest installer.
           cp "dist/Rockmines-WorkTrail-Setup-${APP_BASE}.${{ github.run_number }}.exe" dist/Rockmines-WorkTrail-Setup.exe
-      - name: Save the installer
+      - name: Save the Windows files
         uses: actions/upload-artifact@v4
         with:
-          name: Rockmines-WorkTrail-Setup
-          path: dist/*.exe
+          name: windows-release
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+
+  # 3. The Android app.
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Copy the welcome animation into the Android app
+        run: python3 scripts/sync-android-assets.py
+      - name: Signing key (a secret called WT_KEYSTORE_B64, kept by GitHub)
+        env:
+          WT_KEYSTORE_B64: ${{ secrets.WT_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$WT_KEYSTORE_B64" ]; then
+            echo "$WT_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/wt.p12"
+            echo "WT_KEYSTORE_FILE=$RUNNER_TEMP/wt.p12" >> "$GITHUB_ENV"
+            echo "WT_KEYSTORE_PASSWORD=worktrail-signing" >> "$GITHUB_ENV"
+            echo "WT_KEY_ALIAS=worktrail" >> "$GITHUB_ENV"
+            echo "WT_KEY_PASSWORD=worktrail-signing" >> "$GITHUB_ENV"
+            echo "SIGNED=yes" >> "$GITHUB_ENV"
+          else
+            echo "::warning title=android-signing::No signing key yet (secret WT_KEYSTORE_B64). The phone app is built for testing only and is not published."
+            echo "SIGNED=no" >> "$GITHUB_ENV"
+          fi
+      - name: Build the phone app
+        run: gradle -p android assembleDebug assembleRelease -PwtVersionName=${APP_BASE}.${{ github.run_number }} -PwtVersionCode=${{ github.run_number }}
+      - name: Collect the files
+        run: |
+          mkdir -p apk-out
+          cp android/app/build/outputs/apk/debug/app-debug.apk apk-out/debug-for-test.apk
+          if [ "$SIGNED" = "yes" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk apk-out/Rockmines-WorkTrail.apk
+            cp android/app/build/outputs/apk/release/app-release.apk "apk-out/Rockmines-WorkTrail-${APP_BASE}.${{ github.run_number }}.apk"
+          fi
+          ls -la apk-out
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging apk-out/debug-for-test.apk | grep -E "^package|sdkVersion|application-label:" | while IFS= read -r l; do echo "::notice title=apk-info::$l"; done || true
+      - name: Save the phone app files
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: apk-out/*
+
+  # 4. Self-check of the phone app on a virtual phone.
+  android-smoke:
+    needs: android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: apk-out
+      - name: Allow the virtual phone to use hardware speed-up
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run the self-check on a virtual phone
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_5
+          disable-animations: true
+          script: bash android/ci/run-smoke.sh
+      - name: Report self-check results
+        if: always()
+        run: |
+          if [ -f smoke-android.log ]; then
+            msg=$(grep -E "PASS|FAIL|SMOKE|Fatal|FATAL|Exception" smoke-android.log | head -60 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::notice title=phone-self-check::${msg}"
+          else
+            echo "::warning title=phone-self-check::no log file"
+          fi
+
+  # 5. One release with the Windows installer and the phone app.
+  publish:
+    needs: [windows, android]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: release-files
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: apk-files
+      - name: Pick the files to publish
+        run: |
+          rm -f apk-files/debug-for-test.apk
+          ls -la release-files apk-files
       - name: Publish on the Releases page
-        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.APP_BASE }}.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           files: |
-            dist/*.exe
-            dist/*.exe.blockmap
-            dist/latest.yml
+            release-files/*
+            apk-files/*
           name: Rockmines WorkTrail ${{ env.APP_BASE }}.${{ github.run_number }}
           body: |
-            Download **Rockmines-WorkTrail-Setup.exe** below, double-click it, and WorkTrail installs itself.
+            **Windows PC:** download **Rockmines-WorkTrail-Setup.exe**, double-click it, and WorkTrail installs itself.
             If Windows shows a blue "Windows protected your PC" box, click **More info**, then **Run anyway**.
+
+            **Android phone:** download **Rockmines-WorkTrail.apk** on the phone and open it. Allow "install from this source" when asked.

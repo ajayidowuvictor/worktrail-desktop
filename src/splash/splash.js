@@ -12,6 +12,7 @@
 	var leave = document.getElementById('leave');
 
 	var quick = /[?&]quick=1/.test(location.search);
+	if (hint && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) hint.textContent = 'Tap anywhere to skip';
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	var DURATIONS = reduce ? [1800, 1200, 1200, 1200, 1200, 1500] : [4800, 3300, 3300, 3300, 3300, 2600];
 

@@ -25,6 +25,10 @@ final class SmokeHook {
         Log.i(TAG, (ok ? "PASS " : "FAIL ") + name + (extra == null ? "" : "  " + extra));
     }
 
+    private static void check(String name, boolean ok) {
+        check(name, ok, null);
+    }
+
     private static String eval(final Activity a, final WebView w, final String js) throws Exception {
         final String[] out = new String[1];
         final CountDownLatch latch = new CountDownLatch(1);

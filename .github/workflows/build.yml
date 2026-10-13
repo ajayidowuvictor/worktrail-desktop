@@ -3,8 +3,11 @@ name: Build Rockmines WorkTrail
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
+
+env:
+  # Staff PCs update when this number grows. Change 1.1 to 1.2 for a bigger release.
+  APP_BASE: '1.1'
 
 permissions:
   contents: write
@@ -34,20 +37,13 @@ jobs:
         run: |
           mkdir -p smoke-out
           xvfb-run -a npx electron . --no-sandbox --disable-gpu 2>&1 | tee smoke-out/log.txt
-      - name: Publish self-check results on a results branch
+      - name: Report self-check results
         if: always()
         run: |
-          grep -E "PASS|FAIL|SMOKE|Error" smoke-out/log.txt | while IFS= read -r line; do echo "::notice title=self-check::$line"; done || true
-          ls -la smoke-out | while IFS= read -r line; do echo "::notice title=files::$line"; done || true
-          mkdir -p /tmp/res && cp -r smoke-out/. /tmp/res/ || true
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git checkout --orphan smoke-results
-          git rm -rf . -q || true
-          cp -r /tmp/res/. . || true
-          git add -A
-          git commit -m "Self-check results" || true
-          git push -f origin smoke-results 2>&1 | tee /tmp/push.log || echo "::error title=push-failed::$(tr '\n' ' ' < /tmp/push.log)"
+          msg=$(grep -E "PASS|FAIL|SMOKE|Error|error" smoke-out/log.txt | head -80 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::notice title=self-check::${msg}"
+          fails=$(grep -c "^FAIL" smoke-out/log.txt || true)
+          echo "::notice title=self-check-fail-count::${fails}"
       - name: Save the pictures
         if: always()
         uses: actions/upload-artifact@v4
@@ -67,7 +63,14 @@ jobs:
       - name: Install
         run: npm install --no-audit --no-fund
       - name: Build the installer
-        run: npm run dist
+        shell: bash
+        run: npx electron-builder --win --x64 --publish never -c.extraMetadata.version=${APP_BASE}.${{ github.run_number }}
+      - name: Make sure the update file exists
+        shell: bash
+        run: |
+          node scripts/make-latest.js
+          ls -la dist
+          cat dist/latest.yml
       - name: Save the installer
         uses: actions/upload-artifact@v4
         with:
@@ -77,10 +80,13 @@ jobs:
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
+          tag_name: v${{ env.APP_BASE }}.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
-          files: dist/*.exe
-          name: Rockmines WorkTrail (build ${{ github.run_number }})
+          files: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+          name: Rockmines WorkTrail ${{ env.APP_BASE }}.${{ github.run_number }}
           body: |
             Download **Rockmines-WorkTrail-Setup-*.exe** below, double-click it, and WorkTrail installs itself.
             If Windows shows a blue "Windows protected your PC" box, click **More info**, then **Run anyway**.

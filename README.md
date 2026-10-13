@@ -16,6 +16,10 @@ Developed by JustNew.
 ## What staff see
 - Click the **Rockmines WorkTrail** icon: the welcome animation plays (click anywhere to skip).
 - WorkTrail opens and shows the sign-in box. People stay signed in on that PC.
+- Only WorkTrail is shown: the website's own menu, banner, footer and WordPress bar are hidden inside the program (the website in a browser is unchanged).
+- **File → Log out** signs out on that PC.
+- Closing the window keeps the program running near the clock. Pop-ups appear for new tasks and messages. Right-click the icon to quit, or to turn on **Start with Windows**.
+- Updates download by themselves; the program asks before restarting. **Help → Check for updates** checks straight away.
 - Without internet, a "can't connect" page appears with a **Try again** button.
 
 ## Keyboard
@@ -24,4 +28,5 @@ F5 or Ctrl+R reload, F11 full screen, Alt+Left go back.
 ## For developers
 - `npm install` then `npm start` runs it.
 - `npm run dist` builds the Windows installer (done automatically by GitHub on every push).
+- Every push to `main` builds a release `v<APP_BASE>.<build number>` (see `APP_BASE` in the workflow) with `latest.yml`, which installed programs read to find updates. The repository must be public (or the files hosted elsewhere) for staff PCs to download installers and updates.
 - `WORKTRAIL_URL` changes the website address (used by the automatic self-check).

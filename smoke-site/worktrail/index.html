@@ -1,1 +1,40 @@
-<!doctype html><title>Smoke OK</title><body style="font:32px sans-serif;padding:40px;background:#f5f6fa">WorkTrail test page</body>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke OK</title>
+<style>
+	body { font: 16px sans-serif; margin: 0; padding-top: 32px; background: #ddd; }
+	#wpadminbar { position: fixed; top: 0; left: 0; right: 0; height: 32px; background: #1d2327; color: #fff; }
+	#top-banner { background: #4ae21b; padding: 14px; text-align: center; color: #fff; }
+	#site-header { padding: 30px 90px; background: #fff; }
+	#page-title { font-size: 44px; margin: 30px 100px; }
+	#boxed { max-width: 600px; margin: 0 auto; padding: 40px; background: #fff; border: 1px solid #ccc; }
+	#site-footer { padding: 60px; background: #111; color: #fff; }
+	#cookie-popup { position: fixed; right: 20px; bottom: 20px; width: 160px; height: 50px; background: #fff; border: 1px solid #999; }
+	.wt-app { background: #f5f6fa; border: 1px solid #e4e7ec; border-radius: 18px; min-height: 70vh; padding: 20px; font-size: 24px; }
+</style>
+<script>window.WorkTrailConfig = { restUrl: '/wp-json/worktrail/v1/', nonce: 'test-nonce', context: 'front' };</script>
+</head>
+<body class="admin-bar">
+	<div id="wpadminbar">Howdy, Admin</div>
+	<div id="top-banner">We are currently waiting for you</div>
+	<header id="site-header"><nav>Home About Us Our Services Media</nav></header>
+	<h1 id="page-title">WorkTrail</h1>
+	<div id="boxed">
+		<div id="worktrail-root" class="wt-app" data-context="front">WorkTrail test app</div>
+	</div>
+	<footer id="site-footer">Footer</footer>
+	<div id="cookie-popup">Cookies</div>
+	<script>
+		// A pop-up the website adds a little later, like a cookie banner or chat button would.
+		setTimeout(function () {
+			var d = document.createElement('div');
+			d.id = 'late-widget';
+			d.textContent = 'Chat with us';
+			d.style.cssText = 'position:fixed;left:20px;bottom:20px;background:#fff;padding:10px';
+			document.body.appendChild(d);
+		}, 300);
+	</script>
+</body>
+</html>

@@ -1,10 +1,12 @@
 'use strict';
 /* Rockmines WorkTrail for Windows.
    A window around rockminesgeo.com/worktrail/ with a welcome animation, its own
-   icon, and a friendly page when the internet is down. All data stays on the
-   website, so the General Manager always sees everyone's work as it happens. */
+   icon, a menu with Log out, an icon near the clock that keeps it running with
+   pop-ups for new tasks and messages, automatic updates, and a friendly page when
+   the internet is down. All data stays on the website, so the General Manager
+   always sees everyone's work as it happens. */
 
-const { app, BrowserWindow, WebContentsView, Menu, ipcMain, shell, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, Menu, Tray, Notification, ipcMain, shell, session, dialog, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -12,7 +14,10 @@ const SITE_URL = process.env.WORKTRAIL_URL || 'https://rockminesgeo.com/worktrai
 const SITE_ORIGIN = new URL(SITE_URL).origin;
 const PARTITION = 'persist:worktrail'; // keeps people signed in between launches
 const LOAD_TIMEOUT_MS = 30000;
+const POLL_MS = 60 * 1000;
 const TITLE = 'Rockmines WorkTrail';
+const SITE_PRELOAD = path.join(__dirname, 'site-preload.js');
+const START_HIDDEN = process.argv.includes('--hidden'); // used when Windows starts the program at sign-in
 
 app.setAppUserModelId('com.justnew.rockmines.worktrail');
 
@@ -26,6 +31,18 @@ let siteState = 'loading'; // loading | ready | failed
 let failInfo = '';
 let entered = false;
 let loadTimer = null;
+let tray = null;
+let quitting = false;
+let trayHintShown = false;
+let updates = null;
+const liveToasts = new Set();
+
+// Notification watching
+let seen = new Set();
+let firstPoll = true;
+let lastChat = 0;
+let lastReload = 0;
+let pollTimer = null;
 
 /* ---------- window size memory ---------- */
 
@@ -49,6 +66,46 @@ function saveState() {
 	} catch (e) { /* not important */ }
 }
 
+/* ---------- small helpers ---------- */
+
+function iconPath() {
+	return path.join(__dirname, '..', 'build', 'icon.png');
+}
+
+function toast(title, body, onClick) {
+	try {
+		if (!Notification.isSupported()) return;
+		const n = new Notification({ title, body, icon: iconPath() });
+		liveToasts.add(n); // keep a reference so it is not cleaned up before it is shown
+		n.on('close', () => liveToasts.delete(n));
+		if (onClick) n.on('click', onClick);
+		n.show();
+	} catch (e) { /* pop-ups are a bonus, never a problem */ }
+}
+
+function windowInUse() {
+	if (process.env.WORKTRAIL_SMOKE) return false; // the self-check wants to see every pop-up decision
+	return !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized() && win.isFocused();
+}
+
+function showMainWindow() {
+	if (!win || win.isDestroyed()) {
+		createWindow();
+		return;
+	}
+	if (win.isMinimized()) win.restore();
+	win.show();
+	win.focus();
+	if (updates && updates.hasReady()) updates.promptRestart();
+}
+
+function openRoute(hash) {
+	showMainWindow();
+	if (site && entered) {
+		site.webContents.executeJavaScript('location.hash = ' + JSON.stringify(hash)).catch(() => {});
+	}
+}
+
 /* ---------- the website view ---------- */
 
 function setSiteState(state) {
@@ -62,6 +119,13 @@ function layoutSite() {
 	site.setBounds({ x: 0, y: 0, width: b.width, height: b.height });
 }
 
+function setChrome(on) {
+	// The menu bar is shown while WorkTrail (or the "no internet" page) is on screen, not during the welcome animation.
+	if (!win || win.isDestroyed()) return;
+	win.setMenuBarVisibility(!!on);
+	setTimeout(layoutSite, 80);
+}
+
 function createSite() {
 	if (site) {
 		try { win.contentView.removeChildView(site); } catch (e) { /* not attached */ }
@@ -70,6 +134,7 @@ function createSite() {
 	site = new WebContentsView({
 		webPreferences: {
 			partition: PARTITION,
+			preload: SITE_PRELOAD,
 			contextIsolation: true,
 			sandbox: true,
 			nodeIntegration: false,
@@ -104,7 +169,12 @@ function createSite() {
 		if (url.startsWith(SITE_ORIGIN)) {
 			return {
 				action: 'allow',
-				overrideBrowserWindowOptions: { autoHideMenuBar: true, icon: iconPath(), title: TITLE },
+				overrideBrowserWindowOptions: {
+					autoHideMenuBar: true,
+					icon: iconPath(),
+					title: TITLE,
+					webPreferences: { preload: SITE_PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false },
+				},
 			};
 		}
 		if (/^https?:/i.test(url)) shell.openExternal(url);
@@ -117,7 +187,7 @@ function createSite() {
 		}
 	});
 
-	// Keyboard shortcuts (the program has no menu bar).
+	// Keyboard shortcuts.
 	wc.on('before-input-event', (event, input) => {
 		if (input.type !== 'keyDown') return;
 		const ctrl = input.control || input.meta;
@@ -153,8 +223,10 @@ function enterSite() {
 	if (!win || win.isDestroyed() || !site) return;
 	entered = true;
 	win.contentView.addChildView(site);
+	setChrome(true);
 	layoutSite();
 	site.webContents.focus();
+	if (!process.env.WORKTRAIL_SMOKE) schedulePoll(4000); // the self-check asks for its own look
 }
 
 function showOffline() {
@@ -163,14 +235,240 @@ function showOffline() {
 	if (site) {
 		try { win.contentView.removeChildView(site); } catch (e) { /* not attached */ }
 	}
+	setChrome(true);
 	win.loadFile(path.join(__dirname, 'offline', 'offline.html'), { query: { why: failInfo } });
 }
 
-/* ---------- main window ---------- */
+/* ---------- log out ---------- */
 
-function iconPath() {
-	return path.join(__dirname, '..', 'build', 'icon.png');
+async function logOut(ask = true) {
+	if (ask) {
+		const r = await dialog.showMessageBox(win && win.isVisible() ? win : undefined, {
+			type: 'question',
+			title: TITLE,
+			buttons: ['Log out', 'Cancel'],
+			defaultId: 1,
+			cancelId: 1,
+			message: 'Log out of WorkTrail on this computer?',
+			detail: 'You will need to sign in again the next time you open it.',
+		});
+		if (r.response !== 0) return false;
+	}
+	const ses = session.fromPartition(PARTITION);
+	await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cachestorage'] });
+	try { await ses.clearCache(); } catch (e) { /* not important */ }
+	seen = new Set();
+	firstPoll = true;
+	lastChat = 0;
+	setBadge(0);
+	if (site) {
+		if (!entered) {
+			// The "no internet" page was showing: start from the beginning.
+			win.loadFile(path.join(__dirname, 'splash', 'splash.html'), { query: { quick: '1' } });
+			setChrome(false);
+			loadSite();
+		} else {
+			site.webContents.loadURL(SITE_URL);
+		}
+	}
+	return true;
 }
+
+/* ---------- tray icon, badge and pop-ups ---------- */
+
+function dotImage() {
+	const size = 16;
+	const buf = Buffer.alloc(size * size * 4);
+	const c = (size - 1) / 2;
+	const r = 6.5;
+	for (let y = 0; y < size; y++) {
+		for (let x = 0; x < size; x++) {
+			const d = Math.hypot(x - c, y - c);
+			const a = d <= r - 0.5 ? 255 : d <= r + 0.5 ? Math.round(255 * (r + 0.5 - d)) : 0;
+			const i = (y * size + x) * 4;
+			buf[i] = 0x20; buf[i + 1] = 0x2d; buf[i + 2] = 0xd9; buf[i + 3] = a; // BGRA: red
+		}
+	}
+	return nativeImage.createFromBitmap(buf, { width: size, height: size });
+}
+
+let dot = null;
+function setBadge(total) {
+	try {
+		if (win && !win.isDestroyed() && process.platform === 'win32') {
+			if (!dot) dot = dotImage();
+			win.setOverlayIcon(total > 0 ? dot : null, total > 0 ? total + ' waiting' : '');
+		}
+		if (tray) tray.setToolTip(TITLE + (total > 0 ? ' - ' + total + ' waiting' : ''));
+	} catch (e) { /* not important */ }
+}
+
+function autoStartOn() {
+	try { return app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin; } catch (e) { return false; }
+}
+
+function setAutoStart(on) {
+	try { app.setLoginItemSettings({ openAtLogin: !!on, args: ['--hidden'] }); } catch (e) { /* not important */ }
+	if (tray) tray.setContextMenu(trayMenu());
+}
+
+function trayMenu() {
+	return Menu.buildFromTemplate([
+		{ label: 'Open Rockmines WorkTrail', click: showMainWindow },
+		{ type: 'separator' },
+		{ label: 'Check for updates', click: () => updates && updates.check(true) },
+		{ label: 'Start with Windows', type: 'checkbox', checked: autoStartOn(), click: (item) => setAutoStart(item.checked) },
+		{ label: 'Log out…', click: () => { showMainWindow(); logOut(true); } },
+		{ type: 'separator' },
+		{ label: 'Quit', click: () => { quitting = true; app.quit(); } },
+	]);
+}
+
+function createTray() {
+	try {
+		const img = nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16 });
+		tray = new Tray(img);
+		tray.setToolTip(TITLE);
+		tray.setContextMenu(trayMenu());
+		tray.on('click', showMainWindow);
+		tray.on('double-click', showMainWindow);
+		return true;
+	} catch (e) {
+		tray = null; // e.g. a test machine without a system tray
+		return false;
+	}
+}
+
+function schedulePoll(ms) {
+	clearTimeout(pollTimer);
+	pollTimer = setTimeout(async () => {
+		try { await pollNotifications(); } catch (e) { /* try again next time */ }
+		schedulePoll(POLL_MS);
+	}, ms);
+}
+
+// Asks WorkTrail (inside the signed-in website window) whether anything new is waiting.
+const POLL_SCRIPT = `(async function () {
+	var c = window.WorkTrailConfig;
+	if (!c || !c.restUrl) return { state: 'nocfg' };
+	async function get(p) {
+		var r = await fetch(c.restUrl + p, { credentials: 'same-origin', cache: 'no-store', headers: { 'X-WP-Nonce': c.nonce, 'Accept': 'application/json' } });
+		if (!r.ok) return { __status: r.status };
+		return r.json();
+	}
+	var n = await get('notifications');
+	if (n.__status) return { state: 'http', code: n.__status };
+	var m = await get('chat/unread');
+	return {
+		state: 'ok',
+		unread: n.unread || 0,
+		items: (n.items || []).filter(function (x) { return !x.is_read; }).slice(0, 15).map(function (x) {
+			return { id: x.id, task_id: x.task_id, message: String(x.message || '') };
+		}),
+		chat: m && typeof m.unread === 'number' ? m.unread : 0
+	};
+})()`;
+
+async function pollNotifications() {
+	const out = { state: 'skipped', unread: 0, chat: 0, shown: 0 };
+	if (!site || !entered || siteState !== 'ready') return out;
+	const wc = site.webContents;
+	if (wc.isDestroyed() || wc.isLoading()) return out;
+
+	let r;
+	try { r = await wc.executeJavaScript(POLL_SCRIPT); } catch (e) { return out; }
+	if (!r) return out;
+	out.state = r.state;
+
+	if (r.state === 'http') {
+		// Signed out, or the page's pass has expired: reload once in a while to get a fresh one.
+		if (Date.now() - lastReload > 10 * 60 * 1000) {
+			lastReload = Date.now();
+			wc.reload();
+		}
+		return out;
+	}
+	if (r.state !== 'ok') return out;
+
+	out.unread = r.unread;
+	out.chat = r.chat;
+	setBadge(r.unread + r.chat);
+
+	const fresh = r.items.filter((x) => !seen.has(x.id));
+	r.items.forEach((x) => seen.add(x.id));
+	const chatUp = r.chat > lastChat;
+	const wasFirst = firstPoll;
+	firstPoll = false;
+	lastChat = r.chat;
+
+	if (windowInUse()) return out; // the person is looking at WorkTrail already
+
+	if (wasFirst) {
+		const total = r.unread + r.chat;
+		if (total > 0) {
+			out.shown++;
+			toast(TITLE, 'You have ' + total + ' thing' + (total === 1 ? '' : 's') + ' waiting for you.', () => openRoute(r.chat > 0 && r.unread === 0 ? '#/messages' : '#/dashboard'));
+		}
+		return out;
+	}
+	if (fresh.length === 1) {
+		out.shown++;
+		const x = fresh[0];
+		toast('New in WorkTrail', x.message, () => openRoute(x.task_id ? '#/tasks/' + parseInt(x.task_id, 10) : '#/dashboard'));
+	} else if (fresh.length > 1) {
+		out.shown++;
+		toast('New in WorkTrail', fresh.length + ' new notifications.', () => openRoute('#/dashboard'));
+	}
+	if (chatUp) {
+		out.shown++;
+		toast('New message', 'You have ' + r.chat + ' unread message' + (r.chat === 1 ? '' : 's') + '.', () => openRoute('#/messages'));
+	}
+	return out;
+}
+
+/* ---------- menu ---------- */
+
+function showAbout() {
+	dialog.showMessageBox(win && win.isVisible() ? win : undefined, {
+		type: 'info',
+		title: TITLE,
+		buttons: ['OK'],
+		message: TITLE,
+		detail: 'Version ' + app.getVersion() + '\nDeveloped by JustNew for Rockmines Geo-Environmental Services Limited.',
+	});
+}
+
+function buildMenu() {
+	return Menu.buildFromTemplate([
+		{
+			label: 'File',
+			submenu: [
+				{ id: 'home', label: 'WorkTrail home', accelerator: 'CmdOrCtrl+H', click: () => { if (site && entered) site.webContents.loadURL(SITE_URL); } },
+				{ id: 'logout', label: 'Log out…', click: () => logOut(true) },
+				{ type: 'separator' },
+				{ id: 'autostart', label: 'Start with Windows', type: 'checkbox', checked: autoStartOn(), click: (item) => setAutoStart(item.checked) },
+				{ type: 'separator' },
+				{ id: 'quit', label: 'Quit', accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } },
+			],
+		},
+		{
+			label: 'View',
+			submenu: [
+				{ id: 'reload', label: 'Reload', accelerator: 'F5', registerAccelerator: false, click: () => { if (site && entered) site.webContents.reload(); } },
+				{ id: 'fullscreen', label: 'Full screen', accelerator: 'F11', registerAccelerator: false, click: () => { if (win) win.setFullScreen(!win.isFullScreen()); } },
+			],
+		},
+		{
+			label: 'Help',
+			submenu: [
+				{ id: 'updates', label: 'Check for updates…', click: () => updates && updates.check(true) },
+				{ id: 'about', label: 'About Rockmines WorkTrail', click: showAbout },
+			],
+		},
+	]);
+}
+
+/* ---------- main window ---------- */
 
 function createWindow() {
 	const st = readState();
@@ -185,7 +483,7 @@ function createWindow() {
 		backgroundColor: '#ffffff',
 		title: TITLE,
 		icon: iconPath(),
-		autoHideMenuBar: true,
+		autoHideMenuBar: false,
 		webPreferences: {
 			preload: path.join(__dirname, 'preload.js'),
 			contextIsolation: true,
@@ -193,20 +491,36 @@ function createWindow() {
 			nodeIntegration: false,
 		},
 	});
-	Menu.setApplicationMenu(null);
+	win.setMenuBarVisibility(false);
 	if (st.maximized) win.maximize();
 
 	win.on('page-title-updated', (e) => e.preventDefault());
-	win.once('ready-to-show', () => win.show());
+	win.once('ready-to-show', () => { if (!START_HIDDEN) win.show(); });
 	win.on('resize', layoutSite);
 	win.on('maximize', layoutSite);
 	win.on('unmaximize', layoutSite);
 	win.on('enter-full-screen', layoutSite);
 	win.on('leave-full-screen', layoutSite);
-	win.on('close', saveState);
+	win.on('show', layoutSite);
+	win.on('session-end', () => { quitting = true; }); // Windows is shutting down
+	win.on('close', (e) => {
+		saveState();
+		if (!quitting) {
+			// The X button tucks the program away near the clock instead of stopping it.
+			e.preventDefault();
+			win.hide();
+			if (tray && !trayHintShown) {
+				trayHintShown = true;
+				toast(TITLE + ' is still running', 'Click its icon near the clock to open it again. Use the icon\'s menu to quit.', showMainWindow);
+			} else if (!tray) {
+				quitting = true;
+				app.quit();
+			}
+		}
+	});
 	win.on('closed', () => { win = null; });
 
-	win.loadFile(path.join(__dirname, 'splash', 'splash.html'));
+	win.loadFile(path.join(__dirname, 'splash', 'splash.html'), START_HIDDEN ? { query: { quick: '1' } } : undefined);
 	loadSite(); // loads in the background while the welcome animation plays
 }
 
@@ -222,6 +536,7 @@ ipcMain.on('enter', () => {
 
 ipcMain.on('retry', () => {
 	// Shown after a failure: try again, and go straight in (no second animation).
+	setChrome(false);
 	loadSite();
 	if (win && !win.isDestroyed()) {
 		win.loadFile(path.join(__dirname, 'splash', 'splash.html'), { query: { quick: '1' } });
@@ -231,11 +546,10 @@ ipcMain.on('retry', () => {
 /* ---------- start-up ---------- */
 
 app.on('second-instance', () => {
-	if (win) {
-		if (win.isMinimized()) win.restore();
-		win.focus();
-	}
+	showMainWindow();
 });
+
+app.on('before-quit', () => { quitting = true; });
 
 app.whenReady().then(() => {
 	const ses = session.fromPartition(PARTITION);
@@ -243,7 +557,19 @@ app.whenReady().then(() => {
 	ses.setPermissionRequestHandler((_wc, permission, callback) => {
 		callback(['notifications', 'clipboard-sanitized-write', 'fullscreen'].includes(permission));
 	});
+	Menu.setApplicationMenu(buildMenu());
 	createWindow();
+	createTray();
+
+	updates = require('./updates')({
+		app,
+		dialog,
+		getWin: () => win,
+		beforeQuit: () => { quitting = true; },
+		toast: (t, b) => toast(t, b, showMainWindow),
+	});
+	if (!process.env.WORKTRAIL_SMOKE) updates.start();
+
 	if (process.env.WORKTRAIL_SMOKE) {
 		// Automated self-check used by the GitHub build (never set on staff PCs).
 		require('./smoke')({
@@ -253,11 +579,19 @@ app.whenReady().then(() => {
 			getState: () => siteState,
 			showOffline,
 			siteUrl: SITE_URL,
+			pollNotifications,
+			logOut,
+			updates,
+			hasTray: () => !!tray,
+			getMenu: () => Menu.getApplicationMenu(),
 		});
 	}
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) createWindow();
+		else showMainWindow();
 	});
 });
 
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {
+	if (quitting) app.quit();
+});

@@ -35,3 +35,8 @@ F5 or Ctrl+R reload, F11 full screen, Alt+Left go back.
 - `npm run dist` builds the Windows installer (done automatically by GitHub on every push).
 - Every push to `main` builds a release `v<APP_BASE>.<build number>` (see `APP_BASE` in the workflow) with `latest.yml`, which installed programs read to find updates. The repository must be public (or the files hosted elsewhere) for staff PCs to download installers and updates.
 - `WORKTRAIL_URL` changes the website address (used by the automatic self-check).
+
+## Android phone app
+The `android/` folder is a phone version of the same program (a window around the WorkTrail page with the welcome animation, no website menu, file upload, downloads and update notices). The GitHub build signs it with the secret `WT_KEYSTORE_B64` and publishes it as **Rockmines-WorkTrail.apk**:
+https://github.com/ajayidowuvictor/worktrail-desktop/releases/latest/download/Rockmines-WorkTrail.apk
+`scripts/sync-android-assets.py` copies the welcome animation and clean-view style from the Windows program so both match.

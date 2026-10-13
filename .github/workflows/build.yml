@@ -121,7 +121,8 @@ jobs:
         run: |
           [ -f gradle.log ] || exit 0
           grep -q "BUILD FAILED" gradle.log || exit 0
-          msg=$(grep -E "error:|error |FAILED|What went wrong|Execution failed|Could not|Caused by|symbol|location:|^> " gradle.log | head -40 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          grep -E "error:|error |FAILED|What went wrong|Execution failed|Could not|Caused by|symbol|location:|^> " gradle.log > problems.txt || true
+          msg=$(head -40 problems.txt | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
           echo "::error title=android-build::${msg}"
       - name: Collect the files
         run: |

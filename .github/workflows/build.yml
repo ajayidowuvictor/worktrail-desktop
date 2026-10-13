@@ -132,6 +132,9 @@ jobs:
             cp android/app/build/outputs/apk/release/app-release.apk "apk-out/Rockmines-WorkTrail-${APP_BASE}.${{ github.run_number }}.apk"
           fi
           ls -la apk-out
+          if [ "$SIGNED" = "yes" ]; then
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs apk-out/Rockmines-WorkTrail.apk | head -4 | while IFS= read -r l; do echo "::notice title=apk-signature::$l"; done
+          fi
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging apk-out/debug-for-test.apk | grep -E "^package|sdkVersion|application-label:" | while IFS= read -r l; do echo "::notice title=apk-info::$l"; done || true
       - name: Save the phone app files
         uses: actions/upload-artifact@v4

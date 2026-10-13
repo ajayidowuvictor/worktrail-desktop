@@ -8,6 +8,11 @@ website, so the General Manager always sees everyone's work as it happens.
 Developed by JustNew.
 
 ## Get the installer
+**Link to give staff (always the newest version):**
+https://github.com/ajayidowuvictor/worktrail-desktop/releases/latest/download/Rockmines-WorkTrail-Setup.exe
+(the repository must be public for this link to work for everyone)
+
+Or by hand:
 1. Open the **Releases** page of this repository (right-hand side of the main page).
 2. Click the newest release, then click **Rockmines-WorkTrail-Setup-x.y.z.exe** to download it.
 3. Double-click the downloaded file. WorkTrail installs itself and opens.

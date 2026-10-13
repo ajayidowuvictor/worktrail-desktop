@@ -112,7 +112,12 @@ jobs:
             echo "SIGNED=no" >> "$GITHUB_ENV"
           fi
       - name: Build the phone app
-        run: gradle -p android assembleDebug assembleRelease -PwtVersionName=${APP_BASE}.${{ github.run_number }} -PwtVersionCode=${{ github.run_number }}
+        run: gradle -p android assembleDebug assembleRelease --stacktrace -PwtVersionName=${APP_BASE}.${{ github.run_number }} -PwtVersionCode=${{ github.run_number }} 2>&1 | tee gradle.log
+      - name: Show build problems
+        if: failure()
+        run: |
+          msg=$(grep -E "error:|error |FAILED|What went wrong|Execution failed|Could not|Caused by|symbol|location:|^> " gradle.log | head -40 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=android-build::${msg}"
       - name: Collect the files
         run: |
           mkdir -p apk-out

@@ -31,7 +31,21 @@ jobs:
           WORKTRAIL_SMOKE: '1'
           WORKTRAIL_URL: http://127.0.0.1:8765/worktrail/
           SMOKE_OUT: ${{ github.workspace }}/smoke-out
-        run: xvfb-run -a npx electron . --no-sandbox --disable-gpu
+        run: |
+          mkdir -p smoke-out
+          xvfb-run -a npx electron . --no-sandbox --disable-gpu 2>&1 | tee smoke-out/log.txt
+      - name: Publish self-check results on a results branch
+        if: always()
+        run: |
+          mkdir -p /tmp/res && cp -r smoke-out/. /tmp/res/ || true
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout --orphan smoke-results
+          git rm -rf . -q || true
+          cp -r /tmp/res/. . || true
+          git add -A
+          git commit -m "Self-check results" || true
+          git push -f origin smoke-results || true
       - name: Save the pictures
         if: always()
         uses: actions/upload-artifact@v4

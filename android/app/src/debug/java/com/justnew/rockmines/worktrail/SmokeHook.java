@@ -84,12 +84,17 @@ final class SmokeHook {
                 check("app started and welcome screen is showing",
                         waitFor(a, () -> a.overlayView().getUrl() != null && a.overlayView().getUrl().contains("splash/splash.html"), 20000),
                         urlOf(a, a.overlayView()));
-                check("welcome screen can talk to the app",
-                        "objectfunction".equals(text(eval(a, a.overlayView(), "typeof window.wt + typeof window.wt.enter"))));
+                boolean bridged = false;
+                for (int i = 0; i < 40 && !bridged; i++) {
+                    bridged = "objectfunction".equals(text(eval(a, a.overlayView(), "(window.wt ? typeof window.wt + typeof window.wt.enter : 'none')")));
+                    if (!bridged) Thread.sleep(250);
+                }
+                check("welcome screen can talk to the app", bridged);
                 check("website loaded in background", waitFor(a, () -> "ready".equals(a.siteStateNow()), 40000), "state=" + a.siteStateNow());
 
-                a.runOnUiThread(a::enterForTest);
-                check("app opens the website", waitFor(a, a::isEntered, 5000));
+                // Like a person tapping the welcome screen: the screen asks the app to open the website.
+                eval(a, a.overlayView(), "window.wt.enter()");
+                check("app opens the website when the welcome screen asks", waitFor(a, a::isEntered, 5000));
                 Thread.sleep(1200);
 
                 WebView site = a.siteView();

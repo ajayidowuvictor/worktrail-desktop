@@ -501,6 +501,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         visible = true;
+        UpdateChecker.onResume(this);
         site.onResume();
         site.resumeTimers();
     }

@@ -34,6 +34,9 @@ let loadTimer = null;
 let tray = null;
 let quitting = false;
 let trayHintShown = false;
+let hiddenAt = 0; // when the window was last tucked away near the clock (0 = not hidden)
+// Away this long and the welcome animation plays again on the way back in.
+const AWAY_MS = 30 * 60 * 1000;
 let updates = null;
 const liveToasts = new Set();
 
@@ -66,6 +69,27 @@ function saveState() {
 	} catch (e) { /* not important */ }
 }
 
+/* ---------- small settings kept on this computer ---------- */
+
+function settingsFile() {
+	return path.join(app.getPath('userData'), 'settings.json');
+}
+
+function welcomeSoundOn() {
+	try { return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')).welcomeSound !== false; } catch (e) { return true; }
+}
+
+function setWelcomeSound(on) {
+	try { fs.writeFileSync(settingsFile(), JSON.stringify({ welcomeSound: !!on })); } catch (e) { /* not important */ }
+	if (tray) tray.setContextMenu(trayMenu());
+	try { Menu.setApplicationMenu(buildMenu()); } catch (e) { /* not important */ }
+}
+
+function splashOptions() {
+	// The welcome sound is off in the automated self-check and for the quick start at Windows sign-in.
+	return { query: { sound: welcomeSoundOn() && !process.env.WORKTRAIL_SMOKE ? '1' : '0' } };
+}
+
 /* ---------- small helpers ---------- */
 
 function iconPath() {
@@ -93,10 +117,33 @@ function showMainWindow() {
 		createWindow();
 		return;
 	}
+	hiddenAt = 0;
 	if (win.isMinimized()) win.restore();
 	win.show();
 	win.focus();
 	if (updates && updates.hasReady()) updates.promptRestart();
+}
+
+// Opening the program from its icon: after a long time away, the welcome animation plays again.
+// (Clicking a pop-up alert goes straight to the work, never through the animation.)
+function reopenWindow() {
+	if (!win || win.isDestroyed()) {
+		createWindow();
+		return;
+	}
+	if (hiddenAt && Date.now() - hiddenAt >= AWAY_MS) replayWelcome();
+	showMainWindow();
+}
+
+function replayWelcome() {
+	if (!win || win.isDestroyed()) return;
+	entered = false;
+	if (site) {
+		try { win.contentView.removeChildView(site); } catch (e) { /* not attached */ }
+	}
+	setChrome(false);
+	win.loadFile(path.join(__dirname, 'splash', 'splash.html'), splashOptions());
+	loadSite(); // fresh copy of the website loads while the animation plays
 }
 
 function openRoute(hash) {
@@ -315,10 +362,11 @@ function setAutoStart(on) {
 
 function trayMenu() {
 	return Menu.buildFromTemplate([
-		{ label: 'Open Rockmines WorkTrail', click: showMainWindow },
+		{ label: 'Open Rockmines WorkTrail', click: reopenWindow },
 		{ type: 'separator' },
 		{ label: 'Check for updates', click: () => updates && updates.check(true) },
 		{ label: 'Start with Windows', type: 'checkbox', checked: autoStartOn(), click: (item) => setAutoStart(item.checked) },
+		{ label: 'Welcome sound', type: 'checkbox', checked: welcomeSoundOn(), click: (item) => setWelcomeSound(item.checked) },
 		{ label: 'Log out…', click: () => { showMainWindow(); logOut(true); } },
 		{ type: 'separator' },
 		{ label: 'Quit', click: () => { quitting = true; app.quit(); } },
@@ -331,8 +379,8 @@ function createTray() {
 		tray = new Tray(img);
 		tray.setToolTip(TITLE);
 		tray.setContextMenu(trayMenu());
-		tray.on('click', showMainWindow);
-		tray.on('double-click', showMainWindow);
+		tray.on('click', reopenWindow);
+		tray.on('double-click', reopenWindow);
 		return true;
 	} catch (e) {
 		tray = null; // e.g. a test machine without a system tray
@@ -448,6 +496,7 @@ function buildMenu() {
 				{ id: 'logout', label: 'Log out…', click: () => logOut(true) },
 				{ type: 'separator' },
 				{ id: 'autostart', label: 'Start with Windows', type: 'checkbox', checked: autoStartOn(), click: (item) => setAutoStart(item.checked) },
+				{ id: 'welcomesound', label: 'Welcome sound', type: 'checkbox', checked: welcomeSoundOn(), click: (item) => setWelcomeSound(item.checked) },
 				{ type: 'separator' },
 				{ id: 'quit', label: 'Quit', accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } },
 			],
@@ -490,6 +539,7 @@ function createWindow() {
 			contextIsolation: true,
 			sandbox: true,
 			nodeIntegration: false,
+			autoplayPolicy: 'no-user-gesture-required', // lets the welcome animation play its soft sound
 		},
 	});
 	win.setMenuBarVisibility(false);
@@ -509,6 +559,7 @@ function createWindow() {
 		if (!quitting) {
 			// The X button tucks the program away near the clock instead of stopping it.
 			e.preventDefault();
+			hiddenAt = Date.now();
 			win.hide();
 			if (tray && !trayHintShown) {
 				trayHintShown = true;
@@ -521,7 +572,8 @@ function createWindow() {
 	});
 	win.on('closed', () => { win = null; });
 
-	win.loadFile(path.join(__dirname, 'splash', 'splash.html'), START_HIDDEN ? { query: { quick: '1' } } : undefined);
+	if (START_HIDDEN) hiddenAt = Date.now(); // opened later from the icon after a long time: the animation plays then
+	win.loadFile(path.join(__dirname, 'splash', 'splash.html'), START_HIDDEN ? { query: { quick: '1' } } : splashOptions());
 	loadSite(); // loads in the background while the welcome animation plays
 }
 
@@ -547,7 +599,7 @@ ipcMain.on('retry', () => {
 /* ---------- start-up ---------- */
 
 app.on('second-instance', () => {
-	showMainWindow();
+	reopenWindow();
 });
 
 app.on('before-quit', () => { quitting = true; });
@@ -579,6 +631,8 @@ app.whenReady().then(() => {
 			getSite: () => site,
 			getState: () => siteState,
 			showOffline,
+			reopenWindow,
+			setHiddenAt: (t) => { hiddenAt = t; },
 			siteUrl: SITE_URL,
 			pollNotifications,
 			logOut,

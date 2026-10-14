@@ -12,6 +12,7 @@
 	var leave = document.getElementById('leave');
 
 	var quick = /[?&]quick=1/.test(location.search);
+	var sound = !quick && /[?&]sound=1/.test(location.search) ? window.WTSplashSound : null; // soft sounds, when switched on
 	if (hint && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) hint.textContent = 'Tap anywhere to skip';
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	var DURATIONS = reduce ? [1800, 1200, 1200, 1200, 1200, 1500] : [4800, 3300, 3300, 3300, 3300, 2600];
@@ -26,6 +27,7 @@
 		index = i;
 		slides.forEach(function (s, n) { s.classList.toggle('active', n === i); });
 		stage.classList.toggle('light', slides[i].getAttribute('data-light') === '1');
+		if (sound) sound.play(i);
 	}
 
 	function next() {
@@ -70,6 +72,7 @@
 	}
 
 	function begin() {
+		if (sound) sound.init();
 		if (api) {
 			api.onSiteState(function (s) { siteState = s; updateStatus(); });
 			api.siteState().then(function (s) { siteState = s; updateStatus(); });

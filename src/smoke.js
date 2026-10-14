@@ -32,6 +32,7 @@ module.exports = function smoke(ctx) {
 			await waitFor(() => win.webContents.getURL().includes('splash.html') && !win.webContents.isLoading(), 10000);
 			check('welcome screen loads', win.webContents.getURL().includes('splash.html'), win.webContents.getURL());
 			check('bridge available to welcome screen', (await win.webContents.executeJavaScript('typeof window.wt && typeof window.wt.enter')) === 'function');
+			check('welcome screen can ask whether sounds are on', (await win.webContents.executeJavaScript("window.wt.soundPref().then(function (v) { return typeof v; })")) === 'boolean');
 			await sleep(2500);
 			await shot(win.webContents, '1-welcome-logo.png');
 			await sleep(2500);

@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('wt', {
 	enter: () => ipcRenderer.send('enter'),
 	retry: () => ipcRenderer.send('retry'),
 	version: () => ipcRenderer.invoke('version'),
+	soundPref: () => ipcRenderer.invoke('sound-pref'),
 });

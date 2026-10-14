@@ -126,7 +126,7 @@ public class MainActivity extends Activity {
         String saved = PushHelper.savedToken(this);
         if (!saved.isEmpty()) PushHelper.setCookie(saved);
         loadSite();
-        overlay.loadUrl(ASSET_BASE + "splash/splash.html");
+        overlay.loadUrl(ASSET_BASE + "splash/splash.html?sound=" + (BuildConfig.DEBUG ? "0" : "1"));
         PushHelper.fetchToken(this, token -> ui.post(this::claimPhone));
 
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("smoke")) {
@@ -305,6 +305,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
+        s.setMediaPlaybackRequiresUserGesture(false); // lets the welcome animation play its soft sounds
         w.setBackgroundColor(Color.WHITE);
         w.setOverScrollMode(View.OVER_SCROLL_NEVER);
         w.addJavascriptInterface(new Bridge(), "wtNative");
@@ -386,6 +387,22 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String version() {
             return BuildConfig.VERSION_NAME;
+        }
+
+        /** The Sounds switch in the person's WorkTrail account (saved as a small note when they sign in or change it). */
+        @JavascriptInterface
+        public boolean soundPref() {
+            try {
+                String c = CookieManager.getInstance().getCookie(SITE_URL);
+                if (c != null) {
+                    for (String part : c.split(";")) {
+                        if (part.trim().equals("wt_sounds=0")) return false;
+                    }
+                }
+            } catch (Exception e) {
+                /* no note: sounds are on */
+            }
+            return true;
         }
 
         @JavascriptInterface

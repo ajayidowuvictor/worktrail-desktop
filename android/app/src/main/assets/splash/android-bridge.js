@@ -9,6 +9,7 @@
 		onSiteState: function (cb) { listeners.push(cb); },
 		enter: function () { if (n) n.enter(); },
 		retry: function () { if (n) n.retry(); },
-		version: function () { return Promise.resolve(n ? n.version() : ''); }
+		version: function () { return Promise.resolve(n ? n.version() : ''); },
+		soundPref: function () { return Promise.resolve(n && n.soundPref ? n.soundPref() : true); }
 	};
 })();

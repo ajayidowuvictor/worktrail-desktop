@@ -12,6 +12,8 @@
 	var leave = document.getElementById('leave');
 
 	var quick = /[?&]quick=1/.test(location.search);
+	var wantSound = !quick && /[?&]sound=1/.test(location.search) && !!window.WTSplashSound;
+	var sound = null; // set below once the program confirms sounds are switched on
 	if (hint && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) hint.textContent = 'Tap anywhere to skip';
 	var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	var DURATIONS = reduce ? [1800, 1200, 1200, 1200, 1200, 1500] : [4800, 3300, 3300, 3300, 3300, 2600];
@@ -26,6 +28,7 @@
 		index = i;
 		slides.forEach(function (s, n) { s.classList.toggle('active', n === i); });
 		stage.classList.toggle('light', slides[i].getAttribute('data-light') === '1');
+		if (sound) sound.play(i);
 	}
 
 	function next() {
@@ -69,6 +72,15 @@
 		setTimeout(function () { if (api) api.enter(); }, 560);
 	}
 
+	// Sounds play only when the person has them on (the program checks the Sounds switch and its own menu).
+	function setupSound(go) {
+		if (!wantSound) { go(); return; }
+		var ask = api && api.soundPref ? Promise.resolve(api.soundPref()) : Promise.resolve(true);
+		ask.then(function (on) {
+			if (on) { sound = window.WTSplashSound; sound.init(); }
+		}).catch(function () { /* stay quiet */ }).then(go);
+	}
+
 	function begin() {
 		if (api) {
 			api.onSiteState(function (s) { siteState = s; updateStatus(); });
@@ -95,5 +107,5 @@
 		if (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); skip(); }
 	});
 
-	begin();
+	setupSound(begin);
 })();

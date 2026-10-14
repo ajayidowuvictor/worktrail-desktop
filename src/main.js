@@ -581,6 +581,15 @@ function createWindow() {
 
 ipcMain.handle('site-state', () => siteState);
 ipcMain.handle('version', () => app.getVersion());
+// The welcome sound plays only if it is ticked in the menu AND the person has Sounds on in their WorkTrail account.
+ipcMain.handle('sound-pref', async () => {
+	if (!welcomeSoundOn()) return false;
+	try {
+		const c = await session.fromPartition(PARTITION).cookies.get({ name: 'wt_sounds' });
+		if (c.length && c[0].value === '0') return false;
+	} catch (e) { /* no note saved yet: sounds are on */ }
+	return true;
+});
 
 ipcMain.on('enter', () => {
 	if (siteState === 'ready') enterSite();

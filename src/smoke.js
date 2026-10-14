@@ -29,8 +29,8 @@ module.exports = function smoke(ctx) {
 	(async () => {
 		try {
 			const win = ctx.getWin();
-			await waitFor(() => win.webContents.getURL().endsWith('splash.html') && !win.webContents.isLoading(), 10000);
-			check('welcome screen loads', win.webContents.getURL().endsWith('splash.html'), win.webContents.getURL());
+			await waitFor(() => win.webContents.getURL().includes('splash.html') && !win.webContents.isLoading(), 10000);
+			check('welcome screen loads', win.webContents.getURL().includes('splash.html'), win.webContents.getURL());
 			check('bridge available to welcome screen', (await win.webContents.executeJavaScript('typeof window.wt && typeof window.wt.enter')) === 'function');
 			await sleep(2500);
 			await shot(win.webContents, '1-welcome-logo.png');
@@ -130,7 +130,7 @@ module.exports = function smoke(ctx) {
 			check('a short break does not replay the welcome', win.webContents.getURL().includes('offline.html'), win.webContents.getURL());
 			ctx.setHiddenAt(Date.now() - 31 * 60 * 1000);
 			ctx.reopenWindow();
-			const replayed = await waitFor(() => win.webContents.getURL().endsWith('splash.html') && !win.webContents.isLoading(), 8000);
+			const replayed = await waitFor(() => win.webContents.getURL().includes('splash.html') && !win.webContents.isLoading(), 8000);
 			check('a long break replays the welcome', replayed, win.webContents.getURL());
 			check('welcome sound is available to the welcome screen', replayed && (await win.webContents.executeJavaScript('typeof window.WTSplashSound && typeof window.WTSplashSound.play')) === 'function');
 			await shot(win.webContents, '5-welcome-again.png');

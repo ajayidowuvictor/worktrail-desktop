@@ -199,7 +199,9 @@ public class MainActivity extends Activity {
 
             @Override
             public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
-                if (request.isForMainFrame() && errorResponse.getStatusCode() >= 500) {
+                int code = errorResponse.getStatusCode();
+                // A server error, or the website briefly losing its pages (404/403), shows the friendly screen.
+                if (request.isForMainFrame() && (code >= 500 || code == 404 || code == 403)) {
                     fail("server code " + errorResponse.getStatusCode());
                 }
             }

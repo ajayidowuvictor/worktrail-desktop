@@ -156,7 +156,8 @@ function createSite() {
 		if (entered) showOffline();
 	});
 	wc.on('did-navigate', (_e, url, httpCode) => {
-		if (httpCode >= 500 && url.startsWith(SITE_ORIGIN)) {
+		// A server error, or the website briefly losing its pages (404/403), is shown as the friendly screen.
+		if ((httpCode >= 500 || httpCode === 404 || httpCode === 403) && url.startsWith(SITE_ORIGIN)) {
 			failInfo = 'server code ' + httpCode;
 			setSiteState('failed');
 			if (entered) showOffline();
